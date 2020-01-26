@@ -14,7 +14,7 @@ void start_clock();
 void stop_clock();
 double get_clock_result_seconds();
 void print_time_seconds(double seconds);
-void print_result(const char* function_name, double time);
+void print_result(const char* function_name, double time, size_t m, size_t n);
 void run_matrix_multi_funct(const char* name, matrix_mult_funct, size_t m, size_t n, const void* a, const void* b, void* c);
 void initialize_matrix_multi_params(size_t m, size_t n, float* a, float* b, float* c);
 void* allocate_float_matrix(size_t m, size_t n);

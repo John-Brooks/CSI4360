@@ -4,6 +4,7 @@
 #include "main.h"
 
 #define PRINT_MATRIX_INIT 0
+#define NUM_OPS_PER_ELM 8
 
 int main(int argc, char** argv)
 {
@@ -26,11 +27,17 @@ int main(int argc, char** argv)
 
 	return 0;
 }
-void print_result(const char* function_name, double time)
+double calculate_mflops(size_t m, size_t n, double time)
+{
+	return ((double)(NUM_OPS_PER_ELM * m * n) / time) / 1000000;
+}
+
+void print_result(const char* function_name, double time, size_t m, size_t n)
 {
 	printf("%s took: ", function_name);
 	print_time_seconds(time);
 	printf("\n");
+	printf("MFLOPS: %f\n\n", calculate_mflops(m, n, time));
 }	
 
 void run_matrix_multi_funct(const char* name, matrix_mult_funct funct, size_t m, size_t n, const void* a, const void* b, void* c)
@@ -41,7 +48,7 @@ void run_matrix_multi_funct(const char* name, matrix_mult_funct funct, size_t m,
 	funct(m, n, a, b, c);
 	stop_clock();
 
-	print_result(name, get_clock_result_seconds());
+	print_result(name, get_clock_result_seconds(), m, n);
 }
 
 float mat_term_multiply_real(const float* a, const float* b, const float* c, const float* d)
