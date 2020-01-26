@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <string>
+#include <string.h>
 #include "main.h"
 
 #define PRINT_MATRIX_INIT 0
@@ -29,7 +29,7 @@ int main(int argc, char** argv)
 void print_result(const char* function_name, double time)
 {
 	printf("%s took: ", function_name);
-	print_time_seconds(get_clock_result_seconds());
+	print_time_seconds(time);
 	printf("\n");
 }	
 
@@ -44,12 +44,12 @@ void run_matrix_multi_funct(const char* name, matrix_mult_funct funct, size_t m,
 	print_result(name, get_clock_result_seconds());
 }
 
-inline float mat_term_multiply_real(const float* a, const float* b, const float* c, const float* d)
+float mat_term_multiply_real(const float* a, const float* b, const float* c, const float* d)
 {
 	return ((*a) * (*c) - (*b) * (*d));
 }
 
-inline float mat_term_multiply_imaginary(const float* a, const float* b, const float* c, const float* d)
+float mat_term_multiply_imaginary(const float* a, const float* b, const float* c, const float* d)
 {
 	return ((*a) * (*d) + (*b) * (*c));
 }
@@ -141,15 +141,17 @@ void* allocate_float_matrix(size_t m, size_t n)
 
 void start_clock()
 {
-	start_time = clock();
+	clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start_time);
 }
 void stop_clock()
 {
-	stop_time = clock();
+	clock_gettime(CLOCK_THREAD_CPUTIME_ID, &stop_time);
 }
 double get_clock_result_seconds()
 {
-	return (double)(stop_time - start_time) / CLOCKS_PER_SEC;
+	double result = stop_time.tv_sec - start_time.tv_sec;
+	result += (double)(stop_time.tv_nsec - start_time.tv_nsec) / 1000000000;
+	return result;
 }
 void print_time_seconds(double seconds)
 {
