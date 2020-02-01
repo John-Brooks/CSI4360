@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "main.h"
+#include <time.h>
 
 #define PRINT_MATRIX_INIT 0
 
