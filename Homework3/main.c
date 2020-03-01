@@ -6,7 +6,8 @@
 #include <semaphore.h>
 #include <time.h>
 
-#define RUN_MULTITHREADED 1
+#define RUN_MULTITHREADED
+#define DISABLE_PRINTING
 #define NUM_THREADS 6
 
 #define MIN(X, Y) X < Y ? X : Y
@@ -128,6 +129,7 @@ void PrintGameBoard()
 #ifdef DISABLE_PRINTING
 	return;
 #else
+	printf("\n");
 	for(int row = 0; row < game_board.size; row++)
 	{	
 		for(int col = 0; col < game_board.size; col++)
@@ -274,7 +276,6 @@ int main(int argv, char** argc)
 		
 
 		GameBoardFlip();
-		printf("\n");
 		PrintGameBoard();
 #ifndef RUN_MULTITHREADED
 		if(GameBoardSectionIsDead(&whole_board, game_board.cells))

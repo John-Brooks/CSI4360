@@ -1,4 +1,16 @@
-```
+Description:
+In my implementation of the game there are two copies of the game state stored in memory. game_board has "cells" and "next_cells" pointers which point to the two seperate copies. When evaluating and updating which cells are alive/dead the current state is read from "cells" and the new state is written to "next_cells" once the writing is completed GameBoardFlip() is called which swaps these two pointers. This design makes it so that multiple worker threads can operate, in a read only fashion, on the current state and write the result to the next state without affecting the results of other workers by altering the state of adjacent cells. 
+
+Threads are synchronized with two semaphores per thread. When the game board is ready to be processed each thread's board_semaphore is sem_post-ed to flag that their section is ready for processing. The main thread then waits on a seperate semaphore "result_semaphore" which flags when the worker threads "next_cells" section is finished. Once all workers are finished the main thread flips the buffers, checks that each section has living cells and repeats.
+
+Usage:
+Both the single and multi-threaded implementations are in main.c. To run in single threaded mode comment out "#define RUN_MULTITHREADED". Because printing the game state is computationally expensive it is disabled by default. To re-enable printing comment out "#define DISABLE_PRINTING"
+
+Performance:
+
+Initial Game State + 50 iterations at size N = 50:
+Living cells are "0" dead cells are " "
+
 00000000000000000000000000000000000000000000000000
 0                                                0
 0                                                0
