@@ -56,22 +56,25 @@ void simd_multi(int N, double *A, double *B, double *C)
                     SIMD_LSUM = _mm256_mul_pd(SIMD_A, SIMD_B);
                     SIMD_RSUM = _mm256_add_pd(SIMD_LSUM, SIMD_RSUM);
                 }
-                _mm256_storeu_pd(local_A, SIMD_RSUM);
-                C[i*N + j] = local_A[0] + local_A[1] + local_A[2] + local_A[3];
+                double sum[4];
+                _mm256_storeu_pd(sum, SIMD_RSUM);
+                C[i*N + j] = sum[0] + sum[1] + sum[2] + sum[3];
+                //printf("made a sum\n");
             }    
         }
     }
+    /*printf("a\n");
     free(local_A);
+    printf("b\n");
     free(local_B);
+    printf("c\n");
     free(local_SUM);
-    free(running_SUM)
+    printf("d\n");
+    free(running_SUM);*/
 }
 
 void single_optimization(int N, double *A, double *B, double *C)
 {
-#ifdef __AVX2__
-    return simd_multi(N, A, B, C);
-#else
     int i, j, k;
     double temp;
     for (i=0; i<N; i++)
@@ -84,7 +87,6 @@ void single_optimization(int N, double *A, double *B, double *C)
             C[i*N + j] = temp;
         }
     } 
-#endif
 }
 
 void naive_matmul(int N, double *A, double *B, double *C)
