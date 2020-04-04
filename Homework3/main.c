@@ -8,7 +8,7 @@
 
 #define RUN_MULTITHREADED
 #define DISABLE_PRINTING
-#define NUM_THREADS 6
+#define NUM_THREADS 16
 
 #define MIN(X, Y) X < Y ? X : Y
 #define MAX(X, Y) X < Y ? Y : X
@@ -249,7 +249,7 @@ int main(int argv, char** argc)
 	int return_value;
 	int* return_value_ptr = &return_value;
 	start_clock();
-	for(iterations = 0; iterations < 50; iterations++)
+	for(iterations = 0; iterations < 1000; iterations++)
 	{
 #ifdef RUN_MULTITHREADED
 		//post board is ready for computation
