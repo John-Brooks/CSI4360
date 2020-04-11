@@ -6,8 +6,6 @@
 #include <sys/time.h>
 #include "topology.h"
 
-//#define _SMALL
-
 #ifdef _SMALL
 #define MAX_ITEM 40000LL
 #else
@@ -276,6 +274,12 @@ omp_set_nested(1);
   printf("Time to read from input: %lf\n", timediff(t2,t3));
   printf("Paths processed during input %lld\n", tot_flow);
 
+
+  int fanout_var,d;
+  int flow_per_node;
+  double used_BW;
+  long long int ptr,ptr2;
+
   while(!all_saturated){
     iterator++;
     all_saturated=1;
@@ -288,60 +292,52 @@ omp_set_nested(1);
     //directly access data structure
 
     int minnodeid,mind;
-    #pragma omp parallel for reduction(min:min_rate_limit)
-    for(i=0;i<xgft_h;i++)
-    {
-      int fanout_var = fan_out_opt(baseL[i]);
-      double fanout_BW = xgft_BW[i]*fanout_var;
-      int flow_per_node = 0; //flow_per_node is purely internal
-      double used_BW = 0; //flow_per_node is purely internal
-      
-      for(nodeid=baseL[i];nodeid<baseL[i+1];nodeid++)
-      {
-        for(int d=UP;d>=DOWN;d--)
-        {
-          
-          long long int ptr = nodehead[nodeid][d]; //ptr is purely internal
+    for(i=0;i<xgft_h;i++){
+      fanout_var = fan_out_opt(baseL[i]);
 
-          if(ptr==MAX_ITEM) 
-            continue;
-          
-          while(ptr != MAX_ITEM)
-          {
-            if(rate_allocation_vector[value[ptr]]<0)
-              flow_per_node++;
-            else 
-              used_BW+=rate_allocation_vector[value[ptr]];
+      for(nodeid=baseL[i];nodeid<baseL[i+1];nodeid++){
+        for(d=UP;d>=DOWN;d--){
+          flow_per_node=0;
+          used_BW=0;
+
+          ptr=nodehead[nodeid][d];
+          if(ptr==MAX_ITEM) continue;
+          while(ptr!=MAX_ITEM){
+            if(rate_allocation_vector[value[ptr]]<0)flow_per_node++;
+            else used_BW+=rate_allocation_vector[value[ptr]];
             ptr = next[ptr];
           }
 
-          
-          if(flow_per_node)
-          {
-            rate_limit[nodeid][d] = (fanout_BW - (double)used_BW) / flow_per_node;
+          //used_BW/=fanout_var;
+          //check for nodes which dnt directly get saturates but all flows flowing through it saturates elsewhere
+          if(flow_per_node){
+            rate_limit[nodeid][d] = ((xgft_BW[i]*fanout_var) - used_BW)*1.0/flow_per_node;
             {
-               if(rate_limit[nodeid][d] < min_rate_limit)
-               {
+               if(rate_limit[nodeid][d] < min_rate_limit){
                  min_rate_limit = rate_limit[nodeid][d];
+                 //minnodeid=nodeid; mind=d;
+                 //Reset the saturated list..since there is only one nodeid that saturates at new value
+                // saturated_nodelist_head = saturated_nodelist_tail=MAX_ITEM;
+	         //then insert the newly saturated node;
+               //  insertsaturatednode(nodeid,d);
                }
+               //else if (fabs(rate_limit-min_rate_limit)< SATURATION_GAP){
+               //  insertsaturatednode(nodeid,d);
+              // }
             } //openMP..end critical region
 
-          } 
-          else
-          { 
-            nodehead[nodeid][d] = MAX_ITEM;
-            nodetail[nodeid][d] = MAX_ITEM;	//saturate the switch whose all associated flows are saturated
-          }
+          } else nodehead[nodeid][d] = nodetail[nodeid][d]=MAX_ITEM;	//saturate the switch whose all associated flows are saturated
         }	//end d loop
       }	//end nodeid loop
     }  //end i loop
+
     count=0;
     //taking saturation out of main loop
     for(i=0;i<xgft_h;i++){
       //j = (i)?xgft_W[i-1]:1;
       for(nodeid=baseL[i];nodeid<baseL[i+1];nodeid++){        
         if(fabs(rate_limit[nodeid][0]-min_rate_limit)< SATURATION_GAP){
-          long long int ptr=nodehead[nodeid][0];
+          ptr=nodehead[nodeid][0];
           while(ptr!=MAX_ITEM){
             if(rate_allocation_vector[value[ptr]]<0){
               rate_allocation_vector[value[ptr]]=min_rate_limit;
@@ -353,12 +349,13 @@ omp_set_nested(1);
           nodehead[nodeid][0] = nodetail[nodeid][0]=MAX_ITEM;
         }
         if(fabs(rate_limit[nodeid][1]-min_rate_limit)< SATURATION_GAP){
-          long long int ptr=nodehead[nodeid][1];
+          ptr=nodehead[nodeid][1];
           while(ptr!=MAX_ITEM){
-            if(rate_allocation_vector[value[ptr]]<0)
-            {
+            if(rate_allocation_vector[value[ptr]]<0){
               rate_allocation_vector[value[ptr]]=min_rate_limit;
               count+=1;
+              //printf("saturating flow #%d from downlink of node %d, counter set to %d\n", value[ptr], nodeid, count);
+
             }
             ptr = next[ptr];
           }
@@ -368,7 +365,13 @@ omp_set_nested(1);
       }
     }
 
+
+
+
     cumula_count+=count;
+   
+    //printf("At end of Iteration %d, max limiting rate :  %lf, new flows saturated: %d \n", iterator, min_rate_limit,count);
+    //printf("%lld flows out of %lld saturated so far.\n",cumula_count,tot_flow);
 
     //STEP 4: evaluate loop boundary condition
     count=0;
