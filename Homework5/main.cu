@@ -3,10 +3,14 @@
 #include <vector>
 #include <time.h>
 #include <cuda_runtime.h>
+#include <cmath>
 
-#define BLOCK_SIZE 4096 //number of floats processed per SM
-#define BLOCK_DIM 64//sqrt of BLOCK_SIZE
-#define MAX_THREADS 1024 //Limit of GTX 1080
+#define BLOCK_SIZE 12288 //number of floats processed per SM
+
+#define MAX_THREADS_PER_BLOCK 1024 //Limit of GTX 1080
+#define BLOCK_HEIGHT 32
+#define BLOCK_WIDTH 32 
+#define ELM_PER_THREAD 12 // BLOCK_SIZE / MAX_THREADS
 
 using namespace std;
 
@@ -37,22 +41,31 @@ void PrintPartialMatrix(size_t n, float* matrix)
 
 __global__ void transpose_one_to_one(size_t n, float* input, float* output)
 {
-    unsigned int i = (blockIdx.x * blockDim.x) + threadIdx.x;
-    
+    int global_col = (blockDim.x * blockIdx.x) + threadIdx.x;
+    int global_row = (blockDim.y * blockIdx.y) + threadIdx.y;
+    int i = (n * global_row) + global_col;
+    //printf("block(%i, %i)\tthread(%i, %i)\ti:%i\n", blockIdx.x, blockIdx.y, threadIdx.x, threadIdx.y, i);
     if(i >= n*n)
         return;
+    
     output[((i % n)*n) + (i / n)] = input[i];
 }
-__global__ void transpose_optimized(size_t n, int elm_per_thread, float* input, float* output)
+__global__ void transpose_optimized(size_t n, float* input, float* output)
 {
     __shared__ float s_data[BLOCK_SIZE];
+    
+    //unsigned int global_col = ((blockDim.x * blockIdx.x) * ELM_PER_THREAD) + (threadIdx.x * ELM_PER_THREAD);
+    //unsigned int global_row = (blockDim.y * blockIdx.y) + threadIdx.y;
+    //unsigned int i = (n * (global_row)) + (global_col);
+    unsigned int i = (n * ((blockDim.y * blockIdx.y) + threadIdx.y)) + (((blockDim.x * blockIdx.x) * ELM_PER_THREAD) + (threadIdx.x * ELM_PER_THREAD));
 
-    unsigned int block_level_index = threadIdx.x*elm_per_thread;
-    unsigned int start = (blockIdx.x * blockDim.x) + block_level_index;
-    unsigned int stop = start + elm_per_thread;
+    unsigned int block_level_index = ((threadIdx.y * blockDim.x) + threadIdx.x) * ELM_PER_THREAD;
+
+    unsigned int start = i + block_level_index;
+    unsigned int stop = start + ELM_PER_THREAD;
 
     int s_idx = block_level_index;
-    for(int i = start; i < stop; i++, s_idx++)
+    for(unsigned int i = start; i < stop; i++, s_idx++)
     {   
         if(i >= n*n)
             break;
@@ -89,14 +102,11 @@ int main(int argc, char** argv)
     }
 
     size_t matrix_size = N*N*sizeof(float);
-    
-    dim3 block_structure(BLOCK_DIM, BLOCK_DIM);
 
     float* d_input_matrix;
     float* d_resultant_matrix;
     cudaMalloc((void **)&d_input_matrix, matrix_size);
     cudaMalloc((void **)&d_resultant_matrix, matrix_size);
-
 
     float* h_input_matrix = new float[N*N];
     float* h_resultant_matrix_1 = new float[N*N];
@@ -104,35 +114,49 @@ int main(int argc, char** argv)
     srand(time(nullptr));
     for( int i = 0; i < N*N; i++)
         h_input_matrix[i] = (float)rand() / (float)RAND_MAX;
+        //h_input_matrix[i] = 0.11;
 
     cudaMemcpy(d_input_matrix, h_input_matrix, matrix_size, cudaMemcpyHostToDevice);
 
-    int num_blocks = ((N*N)/MAX_THREADS);
-    num_blocks += (N*N) % MAX_THREADS > 0 ? 1 : 0;
-    int num_threads = MAX_THREADS < N*N ? MAX_THREADS : N*N;
-    printf("num_blocks: %i\n", num_blocks);
-    printf("num_threads: %i\n", num_threads);
-    
+
+    dim3 block(BLOCK_WIDTH, BLOCK_HEIGHT);
+
+    size_t grid_width = N / BLOCK_WIDTH;
+    grid_width += N % BLOCK_WIDTH > 0 ? 1 : 0;
+
+    size_t grid_height = N / (BLOCK_HEIGHT);
+    grid_height += N % BLOCK_HEIGHT > 0 ? 1 : 0;
+
+    dim3 grid(grid_width, grid_height); 
+
+    printf("grid(%lu, %lu)\n", grid_width, grid_height);
+
     start_clock();
-    transpose_one_to_one<<<num_blocks, num_threads>>>(N, d_input_matrix, d_resultant_matrix);
+    transpose_one_to_one<<<grid, block>>>(N, d_input_matrix, d_resultant_matrix);
     cudaDeviceSynchronize();
     stop_clock();
     printf("naive time:\t");
     print_time_seconds(get_clock_result_seconds());
     printf("\n\n");
-
     cudaMemcpy(h_resultant_matrix_1, d_resultant_matrix, matrix_size, cudaMemcpyDeviceToHost);
 
-    size_t real_block_size = N*N < BLOCK_SIZE ? N*N : BLOCK_SIZE;
-    num_blocks = ((N*N)/real_block_size);
-    num_blocks += (N*N) % real_block_size > 0 ? 1 : 0;
-    num_threads = MAX_THREADS < N*N ? MAX_THREADS : N*N;
-    int elm_per_thread = real_block_size / num_threads;
-    printf("num_blocks: %i\n", num_blocks);
-    printf("num_threads: %i\n", num_threads);
-    printf("elm_per_thread: %i\n", elm_per_thread);
+
+
+
+    block = dim3(BLOCK_WIDTH, BLOCK_HEIGHT);
+
+    grid_width = N / (BLOCK_WIDTH * ELM_PER_THREAD);
+    grid_width += N % BLOCK_WIDTH > 0 ? 1 : 0;
+
+    grid_height = N / (BLOCK_HEIGHT);
+    grid_height += N % BLOCK_HEIGHT > 0 ? 1 : 0;
+
+    grid = dim3(grid_width, grid_height); 
+
+    printf("grid(%lu, %lu)\n", grid_width, grid_height);
+
     start_clock();
-    transpose_optimized<<<num_blocks, num_threads>>>(N, elm_per_thread, d_input_matrix, d_resultant_matrix);
+    transpose_optimized<<<grid, block>>>(N, d_input_matrix, d_resultant_matrix);
     cudaDeviceSynchronize();
     stop_clock();
     printf("optimized time:\t");
@@ -150,6 +174,7 @@ int main(int argc, char** argv)
             if(h_resultant_matrix_1[i] != h_resultant_matrix_2[i])
             {
                 printf("index %lu doesn't match\n", i);
+                printf("--1: %0.2f\t2: %0.2f--\n", h_resultant_matrix_1[i], h_resultant_matrix_2[i]);
                 printf("Input:\n");
                 PrintPartialMatrix(N, h_input_matrix);
                 printf("\nOutput 1:\n");
@@ -163,12 +188,6 @@ int main(int argc, char** argv)
     else 
     {
         printf("Results match\n");
-        printf("Input:\n");
-        PrintPartialMatrix(N, h_input_matrix);
-        printf("\nOutput 1:\n");
-        PrintPartialMatrix(N, h_resultant_matrix_1);
-        printf("\nOutput 2:\n");
-        PrintPartialMatrix(N, h_resultant_matrix_2);
     }
 
     cudaFree(d_input_matrix);
