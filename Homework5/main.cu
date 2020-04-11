@@ -1,9 +1,11 @@
+#include <cstdio>
 #include <iostream>
 #include <string>
 #include <vector>
 #include <time.h>
 #include <cuda_runtime.h>
 #include <cmath>
+#include <cstdlib>
 
 #define BLOCK_SIZE 12288 //number of floats processed per SM
 
@@ -94,7 +96,7 @@ int main(int argc, char** argv)
     string dimension_arg = argv[1];
     size_t N = 0;
     try{
-        N = stoul(dimension_arg, nullptr, 10);
+        N = strtoul(dimension_arg.c_str(), NULL, 10);
     }
     catch(...){
         printf("Matrix dimension argument %s is not valid\n", dimension_arg.c_str());
@@ -111,7 +113,7 @@ int main(int argc, char** argv)
     float* h_input_matrix = new float[N*N];
     float* h_resultant_matrix_1 = new float[N*N];
     float* h_resultant_matrix_2 = new float[N*N];
-    srand(time(nullptr));
+    srand(time(NULL));
     for( int i = 0; i < N*N; i++)
         h_input_matrix[i] = (float)rand() / (float)RAND_MAX;
         //h_input_matrix[i] = 0.11;
